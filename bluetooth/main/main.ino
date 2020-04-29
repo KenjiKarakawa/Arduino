@@ -1,130 +1,71 @@
-/*
-  LiquidCrystal Library - Hello World
-
- Demonstrates the use a 16x2 LCD display.  The LiquidCrystal
- library works with all LCD displays that are compatible with the
- Hitachi HD44780 driver. There are many of them out there, and you
- can usually tell them by the 16-pin interface.
-
- This sketch prints "Hello World!" to the LCD
- and shows the time.
-
-  The circuit:
- * LCD RS pin to digital pin 12
- * LCD Enable pin to digital pin 11
- * LCD D4 pin to digital pin 5
- * LCD D5 pin to digital pin 4
- * LCD D6 pin to digital pin 3
- * LCD D7 pin to digital pin 2
- * LCD R/W pin to ground
- * LCD VSS pin to ground
- * LCD VCC pin to 5V
- * 10K resistor:
- * ends to +5V and ground
- * wiper to LCD VO pin (pin 3)
-
- Library originally added 18 Apr 2008
- by David A. Mellis
- library modified 5 Jul 2009
- by Limor Fried (http://www.ladyada.net)
- example added 9 Jul 2009
- by Tom Igoe
- modified 22 Nov 2010
- by Tom Igoe
- modified 7 Nov 2016
- by Arturo Guadalupi
-
- This example code is in the public domain.
-
- http://www.arduino.cc/en/Tutorial/LiquidCrystalHelloWorld
-
-*/
-
-/*
-
-AUTHOR: Hazim Bitar (techbitar)
-DATE: Aug 29, 2013
-LICENSE: Public domain (use at your own risk)
-CONTACT: techbitar at gmail dot com (techbitar.com)
-
-*/
-
-
-#include <SoftwareSerial.h>
-
-SoftwareSerial BTSerial(10, 11); // RX | TX
-
+//  4 Channel Receiver | 4 Kanal Alıcı
+//  PWM output on pins D2, D3, D4, D5 (Çıkış pinleri)
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <Servo.h>
+int ch_width_1 = 0;
+int ch_width_2 = 0;
+int ch_width_3 = 0;
+int ch_width_4 = 0;
+Servo ch1;
+Servo ch2;
+Servo ch3;
+Servo ch4;
+struct Signal {
+byte throttle;      
+byte pitch;
+byte roll;
+byte yaw;
+};
+Signal data;
+const uint64_t pipeIn = 0xE9E8F0F0E1LL;
+RF24 radio(7, 8); 
+void ResetData()
+{
+// Define the inicial value of each data input. | Veri girişlerinin başlangıç değerleri
+// The middle position for Potenciometers. (254/2=127) | Potansiyometreler için orta konum
+data.throttle = 127; // Motor Stop | Motor Kapalı
+data.pitch = 127;  // Center | Merkez
+data.roll = 127;   // Center | Merkez
+data.yaw = 127;   // Center | Merkez
+}
 void setup()
 {
-  //pinMode(9, OUTPUT);  // this pin will pull the HC-05 pin 34 (key pin) HIGH to switch module to AT mode
-  //digitalWrite(9, HIGH);
-  Serial.begin(9600);
-  Serial.println("Enter AT commands2:");
-  BTSerial.begin(9600);  // HC-05 default speed in AT command more
+  //Set the pins for each PWM signal | Her bir PWM sinyal için pinler belirleniyor.
+  ch1.attach(2);
+  ch2.attach(3);
+  ch3.attach(4);
+  ch4.attach(5);
+  //Configure the NRF24 module
+  ResetData();
+  radio.begin();
+  radio.openReadingPipe(1,pipeIn);
+  
+  radio.startListening(); //start the radio comunication for receiver | Alıcı olarak sinyal iletişimi başlatılıyor
 }
-
+unsigned long lastRecvTime = 0;
+void recvData()
+{
+while ( radio.available() ) {
+radio.read(&data, sizeof(Signal));
+lastRecvTime = millis();   // receive the data | data alınıyor
+}
+}
 void loop()
 {
-
-  // Keep reading from HC-05 and send to Arduino Serial Monitor
-  if (BTSerial.available())
-    Serial.write(BTSerial.read());
-
-  // Keep reading from Arduino Serial Monitor and send to HC-05
-  if (Serial.available())
-    BTSerial.write(Serial.read());
+recvData();
+unsigned long now = millis();
+if ( now - lastRecvTime > 1000 ) {
+ResetData(); // Signal lost.. Reset data | Sinyal kayıpsa data resetleniyor
 }
-
-
-// #include <LiquidCrystal.h>
-// #include <SoftwareSerial.h>
-
-// // initialize the library by associating any needed LCD interface pin
-// // with the arduino pin number it is connected to
-// const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-// LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
-// String MessageL0 = "";
-// String MessageL1 = "";
-
-// SoftwareSerial BTSerial(9, 10); // RX | TX
-
-// void printLCD(String &Message, int line = 0)
-// { 
-//   lcd.setCursor(0, 2 - line);
-//   lcd.print(Message);
-// }
-
-// void setup()
-// {
-//   // Print a message to the LCD.
-//   MessageL0 = "Teste de Tempo:";
-//   printLCD(MessageL0);
- 
-//   pinMode(8, OUTPUT);  // this pin will pull the HC-05 pin 34 (key pin) HIGH to switch module to AT mode
-//   digitalWrite(8, HIGH);
-//   //digitalWrite(8, LOW);
-//   Serial.begin(300);
-//   Serial.println("Enter AT commands:");
-//   BTSerial.begin(9600);  // HC-05 default speed in AT command more
-// }
-
-// void loop()
-// {
-
-//   // Keep reading from HC-05 and send to Arduino Serial Monitor
-//   if (BTSerial.available())
-//   {
-//     //String Teste = BTSerial.readString();
-//     //Serial.write(BTSerial.read());
-//     //printLCD(Teste, 2);
-//   }
-
-//   // Keep reading from Arduino Serial Monitor and send to HC-05
-//   if (Serial.available())
-//   {
-//     // String Teste = Serial.readString();
-//     // Serial.println(Teste);
-//     // printLCD(Teste, 2);
-//     BTSerial.write(Serial.read());
-//   }
-// }
+ch_width_1 = map(data.throttle, 0, 255, 1000, 2000);     // pin D2 (PWM signal)
+ch_width_2 = map(data.pitch,    0, 255, 1000, 2000);     // pin D3 (PWM signal)
+ch_width_3 = map(data.roll,     0, 255, 1000, 2000);     // pin D4 (PWM signal)
+ch_width_4 = map(data.yaw,      0, 255, 1000, 2000);     // pin D5 (PWM signal)
+// Write the PWM signal | PWM sinyaller çıkışlara gönderiliyor
+ch1.writeMicroseconds(ch_width_1);
+ch2.writeMicroseconds(ch_width_2);
+ch3.writeMicroseconds(ch_width_3);
+ch4.writeMicroseconds(ch_width_4);
+}
